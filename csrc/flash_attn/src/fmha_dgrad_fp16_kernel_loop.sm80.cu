@@ -52,10 +52,11 @@ void run_fmha_dgrad_fp16_sm80_loop_(const FMHA_dgrad_params &params, cudaStream_
     });
 }
 
-void run_fmha_dgrad_fp16_sm80(const FMHA_dgrad_params &params, cudaStream_t stream) {
+void run_fmha_dgrad_fp16_sm80(Launch_params<FMHA_dgrad_params> &launch_params, cudaStream_t stream) {
+    auto& params = launch_params.params;
     // work around for MSVC issue
     FP16_SWITCH(params.is_bf16, [&] {
-        auto dprops = at::cuda::getCurrentDeviceProperties();
+        auto dprops = launch_params.props;
         if (params.d == 16) {
             if( params.seqlen_k == 128 ) {
                 using Kernel_traits = FMHA_kernel_traits<128, 16, 16, 1, 8, 0x08u, elem_type>;
