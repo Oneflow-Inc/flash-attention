@@ -35,6 +35,7 @@
 #include <fmha/gmem_tile.h>
 #include <fmha/mask.h>
 #include <fmha/softmax.h>
+#include "torch_utils.cuh"
 
 namespace fmha {
 
