@@ -66,6 +66,18 @@ struct Qkv_params {
 
 struct FMHA_fprop_params : public Qkv_params {
 
+    // The attn mask matrix
+    void * __restrict__ attn_mask_ptr;
+    int mask_head_mod_size;
+    int mask_seq_mod_size;
+
+    // The attn bias matrix
+    void * __restrict__ attn_bias_ptr;
+    int bias_mod_size;
+
+    // The ds matrix
+    void * __restrict__ attn_ds_ptr;
+
     // The O matrix (output).
     void * __restrict__ o_ptr;
 
@@ -188,4 +200,4 @@ void run_fmha_dgrad_fp16_sm80(Launch_params<FMHA_dgrad_params> &params, cudaStre
 
 void run_fmha_block_fp16_sm80(Launch_params<FMHA_fprop_params> &launch_params, const bool configure);
 
-void run_fmha_block_dgrad_fp16_sm80(const FMHA_dgrad_params &params, cudaStream_t stream);
+void run_fmha_block_dgrad_fp16_sm80(FMHA_dgrad_params &params, cudaStream_t stream);
