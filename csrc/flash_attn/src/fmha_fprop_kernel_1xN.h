@@ -420,7 +420,7 @@ inline __device__ void device_1xN_(const Params &params, const int bidb, const i
             gmem_mask.move();
 
             // Apply the attn mask.
-            softmax.apply_attn_mask(frag_mask);
+            softmax.apply_attn_mask(frag_mask, params.scale_bmm1f);
         }
 
         if constexpr (has_attn_bias) {
@@ -431,7 +431,7 @@ inline __device__ void device_1xN_(const Params &params, const int bidb, const i
             gmem_bias.move();
 
             // Apply the attn mask.
-            softmax.apply_attn_bias(frag_bias, l);
+            softmax.apply_attn_bias(frag_bias, params.scale_bmm1f, l);
         }
 
         // Apply the mask. 

@@ -492,7 +492,7 @@ struct Softmax : public Softmax_base<Cta_tile, Kernel_traits> {
     }
 
     template<bool zero=false, typename Fragment>
-    inline __device__ void apply_attn_mask(const Fragment (&mask)[MMAS_M][MMAS_N], int l = 0, int loop_step_idx = 0) {
+    inline __device__ void apply_attn_mask(const Fragment (&mask)[MMAS_M][MMAS_N],float scale_, int l = 0, int loop_step_idx = 0) {
         #pragma unroll
         for( int mi = 0; mi < MMAS_M; ++mi ) {
             #pragma unroll
@@ -502,7 +502,7 @@ struct Softmax : public Softmax_base<Cta_tile, Kernel_traits> {
                     #pragma unroll
                     for( int jj = 0; jj < 4; ++jj ) {
                         float value = toFloat(mask[mi][ni].elt(ii * 4 + jj));
-                        this->elt_[2 * mi + ii][4 * ni + jj] += value;
+                        this->elt_[2 * mi + ii][4 * ni + jj] += value / scale_;
                     }
                 }
             }
@@ -510,7 +510,7 @@ struct Softmax : public Softmax_base<Cta_tile, Kernel_traits> {
     }
 
     template<bool zero=false, typename Fragment>
-    inline __device__ void apply_attn_bias(const Fragment (&bias)[MMAS_M][MMAS_N], int l) {
+    inline __device__ void apply_attn_bias(const Fragment (&bias)[MMAS_M][MMAS_N], float scale_, int l) {
         #pragma unroll
         for( int mi = 0; mi < MMAS_M; ++mi ) {
             #pragma unroll
@@ -520,7 +520,7 @@ struct Softmax : public Softmax_base<Cta_tile, Kernel_traits> {
                     #pragma unroll
                     for( int jj = 0; jj < 4; ++jj ) {
                         float value = toFloat(bias[mi][ni].elt(ii * 4 + jj));
-                        this->elt_[2 * mi + ii][4 * ni + jj] += value;
+                        this->elt_[2 * mi + ii][4 * ni + jj] += value / scale_;
                     }
                 }
             }
