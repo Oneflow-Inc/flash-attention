@@ -430,7 +430,7 @@ inline __device__ void device_1xN_(const Params &params, const int bidb, const i
             gmem_bias.template load<Frag_Bias, elem_type>(frag_bias);
             gmem_bias.move();
 
-            // Apply the attn mask.
+            // Apply the attn bias.
             softmax.apply_attn_bias(frag_bias, params.scale_bmm1f, l);
         }
 
