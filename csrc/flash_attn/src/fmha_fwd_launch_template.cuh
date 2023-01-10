@@ -8,6 +8,7 @@
 #include <cuda_bf16.h>
 
 #include "static_switch.h"
+#include "fp16_switch.h"
 #include "fmha.h"
 #include "fmha_fprop_kernel_1xN.h"
 

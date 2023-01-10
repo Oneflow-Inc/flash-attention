@@ -3,6 +3,7 @@
 #pragma once
 
 #include "static_switch.h"
+#include "fp16_switch.h"
 #include "fmha.h"
 #include "fmha_dgrad_kernel_1xN_loop.h"
 
