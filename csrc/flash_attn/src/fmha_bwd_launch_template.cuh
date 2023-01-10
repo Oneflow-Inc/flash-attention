@@ -1,8 +1,8 @@
-/* Copyright (c) 2022, Tri Dao.
- */
+// Copyright (c) 2022, Tri Dao.
+
+#pragma once
 
 #include "static_switch.h"
-#include "fp16_switch.h"
 #include "fmha.h"
 #include "fmha_dgrad_kernel_1xN_loop.h"
 
@@ -13,7 +13,7 @@ __global__ void fmha_dgrad_fp16_sm80_dq_dk_dv_loop_kernel(FMHA_dgrad_params para
 }
 
 template<typename Kernel_traits>
-void run_fmha_dgrad_fp16_sm80_loop_(const FMHA_dgrad_params &params, cudaStream_t stream) {
+void run_fmha_bwd_loop(const FMHA_dgrad_params &params, cudaStream_t stream) {
     constexpr int smem_size_softmax = Kernel_traits::Cta_tile_p::M * Kernel_traits::Cta_tile_p::WARPS_N * sizeof(float);
     constexpr int smem_size_q = Kernel_traits::Smem_tile_q::BYTES_PER_TILE;
     constexpr int smem_size_v = Kernel_traits::Smem_tile_v::BYTES_PER_TILE;
@@ -126,85 +126,4 @@ void run_fmha_dgrad_fp16_sm80_loop_(const FMHA_dgrad_params &params, cudaStream_
             });
         }
     }
-}
-
-void run_fmha_dgrad_fp16_sm80(Launch_params<FMHA_dgrad_params> &launch_params, cudaStream_t stream) {
-    auto params = launch_params.params;
-    // work around for MSVC issue
-    FP16_SWITCH(params.is_bf16, [&] {
-        // auto dprops = at::cuda::getCurrentDeviceProperties();
-        cudaDeviceProp* dprops = oneflow::GetDeviceProperties(oneflow::GetCudaDeviceIndex());
-        if (params.d == 16) {
-            if( params.seqlen_k == 128 ) {
-                using Kernel_traits = FMHA_kernel_traits<128, 16, 16, 1, 8, 0x08u, elem_type>;
-                run_fmha_dgrad_fp16_sm80_loop_<Kernel_traits>(params, stream);
-            } else if( params.seqlen_k == 256 ) {
-                using Kernel_traits = FMHA_kernel_traits<256, 16, 16, 1, 8, 0x08u, elem_type>;
-                run_fmha_dgrad_fp16_sm80_loop_<Kernel_traits>(params, stream);
-            } else {
-                // TD [2022-05-15] 512 gives wrong results rn
-                // using Kernel_traits = FMHA_kernel_traits<512, 16, 16, 1, 8, 0x08u, elem_type>;
-                using Kernel_traits = FMHA_kernel_traits<256, 16, 16, 1, 8, 0x08u, elem_type>;
-                run_fmha_dgrad_fp16_sm80_loop_<Kernel_traits>(params, stream);
-            }
-        } else if (params.d == 32) {
-            if( params.seqlen_k == 128 ) {
-                using Kernel_traits = FMHA_kernel_traits<128, 32, 16, 1, 8, 0x08u, elem_type>;
-                run_fmha_dgrad_fp16_sm80_loop_<Kernel_traits>(params, stream);
-            } else if( params.seqlen_k >= 256 ) {
-                using Kernel_traits = FMHA_kernel_traits<256, 32, 16, 1, 8, 0x08u, elem_type>;
-                run_fmha_dgrad_fp16_sm80_loop_<Kernel_traits>(params, stream);
-            }
-        } else if (params.d == 64) {
-            if( params.seqlen_k == 128 ) {
-                using Kernel_traits = FMHA_kernel_traits<128, 64, 16, 1, 8, 0x08u, elem_type>;
-                run_fmha_dgrad_fp16_sm80_loop_<Kernel_traits>(params, stream);
-            } else if( params.seqlen_k >= 256 ) {
-                if (dprops->major == 8 && dprops->minor == 0) {
-                    // Don't share smem for K & V, and don't keep V in registers
-                    // This speeds things up by 2-3% by avoiding register spills, but it
-                    // uses more shared memory, which is fine on A100 but not other GPUs.
-                    // For other GPUs, we keep V in registers.
-                    using Kernel_traits = FMHA_kernel_traits<256, 64, 16, 1, 8, 0x100u, elem_type>;
-                    run_fmha_dgrad_fp16_sm80_loop_<Kernel_traits>(params, stream);
-                } else if (dprops->major == 8 && dprops->minor > 0) {
-                    using Kernel_traits = FMHA_kernel_traits<256, 64, 16, 1, 8, 0x08u, elem_type>;
-                    run_fmha_dgrad_fp16_sm80_loop_<Kernel_traits>(params, stream);
-                } else if (dprops->major == 7 && dprops->minor == 5) {
-                    using Kernel_traits = FMHA_kernel_traits<128, 64, 16, 1, 8, 0x08u, elem_type>;
-                    run_fmha_dgrad_fp16_sm80_loop_<Kernel_traits>(params, stream);
-                }
-            }
-        } else if (params.d == 128) {
-            using Kernel_traits = FMHA_kernel_traits<128, 128, 16, 1, 8, 0x100u, elem_type>;
-            run_fmha_dgrad_fp16_sm80_loop_<Kernel_traits>(params, stream);
-        }
-        // if (params.d == 64) {
-        //     if (dprops->major == 7 && dprops->minor == 5) {
-        //         using Kernel_traits = FMHA_kernel_traits<128, 64, 16, 1, 8, 0x08u, elem_type>;
-        //         run_fmha_dgrad_fp16_sm80_loop_<Kernel_traits>(params, stream);
-        //     } else {
-        //         if( params.seqlen_k == 128 ) {
-        //             using Kernel_traits = FMHA_kernel_traits<128, 64, 16, 1, 8, 0x08u, elem_type>;
-        //             run_fmha_dgrad_fp16_sm80_loop_<Kernel_traits>(params, stream);
-        //         } else if( params.seqlen_k >= 256 ) {
-        //             if (dprops->major == 8 && dprops->minor == 0) {
-        //                 // Don't share smem for K & V, and don't keep V in registers
-        //                 // This speeds things up by 2-3% by avoiding register spills, but it
-        //                 // uses more shared memory, which is fine on A100 but not other GPUs.
-        //                 // For other GPUs, we keep V in registers.
-        //                 using Kernel_traits = FMHA_kernel_traits<256, 64, 16, 1, 8, 0x100u, elem_type>;
-        //                 run_fmha_dgrad_fp16_sm80_loop_<Kernel_traits>(params, stream);
-        //             } else if (dprops->major == 8 && dprops->minor > 0) {
-        //                 using Kernel_traits = FMHA_kernel_traits<256, 64, 16, 1, 8, 0x08u, elem_type>;
-        //                 run_fmha_dgrad_fp16_sm80_loop_<Kernel_traits>(params, stream);
-        //             }
-        //         }
-        //     }
-        // }
-        // if (params.d == 128) {
-        //     using Kernel_traits = FMHA_kernel_traits<128, 128, 16, 1, 8, 0x100u_elem_type>;
-        //     run_fmha_dgrad_fp16_sm80_loop_<Kernel_traits>(params, stream);
-        // }
-    });
 }
