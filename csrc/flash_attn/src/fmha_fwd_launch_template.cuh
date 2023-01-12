@@ -65,20 +65,17 @@ void run_fmha_fwd_loop(Launch_params<FMHA_fprop_params> &launch_params, const bo
     const int smem_size = fmha::get_dynamic_smem_size<Kernel_traits>()
         + (loop_steps > 1 ? smem_size_softmax_lse : 0);
 
-    // static_assert(Need_attn_mask == !(launch_params.params.attn_mask_ptr == nullptr))
-    // static_assert(Need_attn_bias == !(launch_params.params.attn_bias_ptr == nullptr))
-
     // Work-around for gcc 7. It doesn't like nested BOOL_SWITCH.
     // https://github.com/kokkos/kokkos-kernels/issues/349
     // https://github.com/HazyResearch/flash-attention/issues/21
     BOOL_SWITCH(launch_params.is_dropout, IsDropoutConst, [&] {
         auto kernel = launch_params.params.is_causal
             ? (launch_params.return_softmax
-            ? &fmha_fwd_loop_kernel<Kernel_traits, IsDropoutConst, true, true, true, true>
-            : &fmha_fwd_loop_kernel<Kernel_traits, IsDropoutConst, true, false, true, true>)
+            ? &fmha_fwd_loop_kernel<Kernel_traits, IsDropoutConst, true, true, Need_attn_mask, Need_attn_bias>
+            : &fmha_fwd_loop_kernel<Kernel_traits, IsDropoutConst, true, false, Need_attn_mask, Need_attn_bias>)
             : (launch_params.return_softmax
-            ? &fmha_fwd_loop_kernel<Kernel_traits, IsDropoutConst, false, true, true, true>
-            : &fmha_fwd_loop_kernel<Kernel_traits, IsDropoutConst, false, false, true, true>);
+            ? &fmha_fwd_loop_kernel<Kernel_traits, IsDropoutConst, false, true, Need_attn_mask, Need_attn_bias>
+            : &fmha_fwd_loop_kernel<Kernel_traits, IsDropoutConst, false, false, Need_attn_mask, Need_attn_bias>);
         if( smem_size >= 48 * 1024 ) {
             FMHA_CHECK_CUDA(cudaFuncSetAttribute(
                 kernel, cudaFuncAttributeMaxDynamicSharedMemorySize, smem_size));
