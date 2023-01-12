@@ -45,20 +45,9 @@ __global__ void fmha_fwd_loop_kernel(FMHA_fprop_params params) {
 }
 
 template<typename Kernel_traits, bool Need_attn_mask=false, bool Need_attn_bias=false>
-void run_fmha_fwd_loop(Launch_params<FMHA_fprop_params> &launch_params, const bool configure) {
+void run_fmha_fwd_loop(Launch_params<FMHA_fprop_params> &launch_params) {
     constexpr int blocksize_c = Kernel_traits::Cta_tile_p::N;
     const int loop_steps = (launch_params.params.seqlen_k + blocksize_c - 1) / blocksize_c;
-
-    if (configure) {
-        using Mma_tile_p = fmha::Hmma_tile<typename Kernel_traits::Cta_tile_p>;
-        constexpr int M = Kernel_traits::Cta_tile_p::M;
-        size_t STEPS = (launch_params.params.seqlen_q + M - 1) / M;
-        constexpr size_t MMAS_M = Mma_tile_p::MMAS_M;
-        constexpr size_t MMAS_N = Mma_tile_p::MMAS_N;
-        size_t elts_per_head = STEPS * MMAS_M * MMAS_N * 8 * loop_steps;
-        launch_params.elts_per_thread = elts_per_head;
-        return;
-    }
 
     constexpr int smem_size_softmax_lse = Kernel_traits::Smem_dp_sum::BYTES_PER_TILE;
     // Don't need smem_size_softmax_lse if we're not looping
@@ -80,10 +69,23 @@ void run_fmha_fwd_loop(Launch_params<FMHA_fprop_params> &launch_params, const bo
             FMHA_CHECK_CUDA(cudaFuncSetAttribute(
                 kernel, cudaFuncAttributeMaxDynamicSharedMemorySize, smem_size));
         }
-        dim3 grid(launch_params.params.b, launch_params.params.h);
+        // Automatically set num_splits to maximize occupancy
+        if (launch_params.params.num_splits <= 0) {
+            int ctas_per_sm;
+            cudaError status_ = cudaOccupancyMaxActiveBlocksPerMultiprocessor(
+                &ctas_per_sm, kernel, Kernel_traits::THREADS, smem_size);
+            // auto dprops = at::cuda::getCurrentDeviceProperties();
+            auto dprops = oenflow::GetDeviceProperties(oneflow::GetCudaDeviceIndex());
+            // printf("CTAS_PER_SM = %d, nSMs = %d\n", ctas_per_sm, dprops->multiProcessorCount);
+            constexpr int M = Kernel_traits::Cta_tile_p::M;
+            launch_params.params.num_splits = num_splits_heuristic_fwd(
+                launch_params.params.b * launch_params.params.h, dprops->multiProcessorCount,
+                ctas_per_sm,
+                /*max_splits=*/std::min(30, (launch_params.params.seqlen_q + M - 1 / M))
+            );
+        }
 
-        // printf("grid size: %d %d\n", launch_params.params.b, launch_params.params.h);
-        // printf("block size: %d\n", Kernel_traits::THREADS);
+        dim3 grid(launch_params.params.b, launch_params.params.h, launch_params.params.num_splits);
         kernel<<<grid, Kernel_traits::THREADS, smem_size, launch_params.stream>>>(
             launch_params.params);
         FMHA_CHECK_CUDA(cudaPeekAtLastError());
