@@ -31,8 +31,8 @@ void run_fmha_bwd_loop(const FMHA_dgrad_params &params, cudaStream_t stream) {
 
     bool is_dropout = params.p_dropout < 1.f;  // params.p_dropout is the probability of "keeping"
 
-    static_assert(Need_attn_mask == !(launch_params.params.attn_mask_ptr == nullptr))
-    static_assert(Need_attn_bias == !(launch_params.params.attn_bias_ptr == nullptr))
+    // static_assert(Need_attn_mask == !(launch_params.params.attn_mask_ptr == nullptr))
+    // static_assert(Need_attn_bias == !(launch_params.params.attn_bias_ptr == nullptr))
 
     BOOL_SWITCH(is_dropout, IsDropoutConst, [&] {
         auto kernel = params.is_causal
