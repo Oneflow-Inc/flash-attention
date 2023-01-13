@@ -78,8 +78,8 @@ void run_fmha_bwd_loop(FMHA_dgrad_params &params, cudaStream_t stream, const boo
                 : &fmha_bwd_dq_dk_dv_loop_kernel<Kernel_traits, IsDropoutConst, false, Need_attn_mask, Need_attn_bias, /*loop_steps=*/2>;
         }
         auto kernel_seqparallel = params.is_causal
-            ? &fmha_bwd_q_dk_dv_loop_seqparallel_kernel<Kernel_traits, IsDropoutConst, true, Need_attn_mask, Need_attn_bias,>
-            : &fmha_bwd_q_dk_dv_loop_seqparallel_kernel<Kernel_traits, IsDropoutConst, false, Need_attn_mask, Need_attn_bias,>;
+            ? &fmha_bwd_q_dk_dv_loop_seqparallel_kernel<Kernel_traits, IsDropoutConst, true, Need_attn_mask, Need_attn_bias>
+            : &fmha_bwd_q_dk_dv_loop_seqparallel_kernel<Kernel_traits, IsDropoutConst, false, Need_attn_mask, Need_attn_bias>;
         if( smem_size_dq_dk_dv >= 48 * 1024 ) {
             FMHA_CHECK_CUDA(cudaFuncSetAttribute(
                 kernel, cudaFuncAttributeMaxDynamicSharedMemorySize, smem_size_dq_dk_dv));
@@ -92,7 +92,7 @@ void run_fmha_bwd_loop(FMHA_dgrad_params &params, cudaStream_t stream, const boo
             cudaError status_ = cudaOccupancyMaxActiveBlocksPerMultiprocessor(
                 &ctas_per_sm, kernel, Kernel_traits::THREADS, smem_size_dq_dk_dv);
             // auto dprops = at::cuda::getCurrentDeviceProperties();
-            auto dprops = oneflow::getCurrentDeviceProperties(oneflow::GetCudaDeviceIndex());
+            auto dprops = oneflow::GetDeviceProperties(oneflow::GetCudaDeviceIndex());
             // printf("CTAS_PER_SM = %d, nSMs = %d\n", ctas_per_sm, dprops->multiProcessorCount);
             // constexpr int M = Kernel_traits::Cta_tile_p::M;
             // We don't want more than 10 splits due to numerical error.
