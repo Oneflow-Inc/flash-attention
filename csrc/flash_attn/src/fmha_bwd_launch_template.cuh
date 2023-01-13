@@ -41,9 +41,9 @@ __global__ void fmha_bwd_dq_dk_dv_loop_kernel(FMHA_dgrad_params params) {
     fmha::compute_dq_dk_dv_1xN<Kernel_traits, Is_dropout, Is_causal, Need_attn_mask, Need_attn_bias, loop_steps>(params);
 }
 
-template<typename Kernel_traits, bool Is_dropout, bool Is_causal>
+template<typename Kernel_traits, bool Is_dropout, bool Is_causal, bool Need_attn_mask, bool Need_attn_bias,>
 __global__ void fmha_bwd_q_dk_dv_loop_seqparallel_kernel(FMHA_dgrad_params params) {
-    fmha::compute_dq_dk_dv_seqparallel<Kernel_traits, Is_dropout, Is_causal>(params);
+    fmha::compute_dq_dk_dv_seqparallel<Kernel_traits, Is_dropout, Is_causal, Need_attn_mask, Need_attn_bias,>(params);
 }
 
 template<typename Kernel_traits, bool Need_attn_mask=false, bool Need_attn_bias=false>
@@ -78,8 +78,8 @@ void run_fmha_bwd_loop(FMHA_dgrad_params &params, cudaStream_t stream, const boo
                 : &fmha_bwd_dq_dk_dv_loop_kernel<Kernel_traits, IsDropoutConst, false, Need_attn_mask, Need_attn_bias, /*loop_steps=*/2>;
         }
         auto kernel_seqparallel = params.is_causal
-            ? &fmha_bwd_q_dk_dv_loop_seqparallel_kernel<Kernel_traits, IsDropoutConst, true>
-            : &fmha_bwd_q_dk_dv_loop_seqparallel_kernel<Kernel_traits, IsDropoutConst, false>;
+            ? &fmha_bwd_q_dk_dv_loop_seqparallel_kernel<Kernel_traits, IsDropoutConst, true, Need_attn_mask, Need_attn_bias,>
+            : &fmha_bwd_q_dk_dv_loop_seqparallel_kernel<Kernel_traits, IsDropoutConst, false, Need_attn_mask, Need_attn_bias,>;
         if( smem_size_dq_dk_dv >= 48 * 1024 ) {
             FMHA_CHECK_CUDA(cudaFuncSetAttribute(
                 kernel, cudaFuncAttributeMaxDynamicSharedMemorySize, smem_size_dq_dk_dv));
