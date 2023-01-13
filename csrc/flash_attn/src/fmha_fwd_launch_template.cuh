@@ -75,7 +75,7 @@ void run_fmha_fwd_loop(Launch_params<FMHA_fprop_params> &launch_params) {
             cudaError status_ = cudaOccupancyMaxActiveBlocksPerMultiprocessor(
                 &ctas_per_sm, kernel, Kernel_traits::THREADS, smem_size);
             // auto dprops = at::cuda::getCurrentDeviceProperties();
-            auto dprops = oenflow::GetDeviceProperties(oneflow::GetCudaDeviceIndex());
+            auto dprops = oneflow::GetDeviceProperties(oneflow::GetCudaDeviceIndex());
             // printf("CTAS_PER_SM = %d, nSMs = %d\n", ctas_per_sm, dprops->multiProcessorCount);
             constexpr int M = Kernel_traits::Cta_tile_p::M;
             launch_params.params.num_splits = num_splits_heuristic_fwd(
