@@ -698,7 +698,7 @@ inline __device__ void device_1xN_(const Params &params, const int bidb, const i
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-template<typename Kernel_traits, bool Is_dropout, bool Is_causal, bool Return_softmax, bool Need_attn_mask, bool Need_attn_bias, typename Params>
+template<typename Kernel_traits, bool Is_dropout, bool Is_causal, bool Return_softmax, bool has_attn_mask, bool has_attn_bias, typename Params>
 inline __device__ void device_1xN_loop(const Params &params) {
 
     // The block index for the batch.

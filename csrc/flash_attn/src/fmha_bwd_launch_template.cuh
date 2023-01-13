@@ -91,7 +91,8 @@ void run_fmha_bwd_loop(FMHA_dgrad_params &params, cudaStream_t stream, const boo
             int ctas_per_sm;
             cudaError status_ = cudaOccupancyMaxActiveBlocksPerMultiprocessor(
                 &ctas_per_sm, kernel, Kernel_traits::THREADS, smem_size_dq_dk_dv);
-            auto dprops = at::cuda::getCurrentDeviceProperties();
+            // auto dprops = at::cuda::getCurrentDeviceProperties();
+            auto dprops = oneflow::getCurrentDeviceProperties(oneflow::GetCudaDeviceIndex());
             // printf("CTAS_PER_SM = %d, nSMs = %d\n", ctas_per_sm, dprops->multiProcessorCount);
             constexpr int M = Kernel_traits::Cta_tile_p::M;
             // We don't want more than 10 splits due to numerical error.
