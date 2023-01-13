@@ -1646,8 +1646,8 @@ struct Smem_tile_dp_sum {
         }
     }
 
-    inline __device__ void store_pair(const float (&sum)[MMAS_M * 2], const int buffer_idx) {
-        float *smem_write = smem_ + buffer_idx * ROWS;
+    inline __device__ void store_pair(const float (&sum)[MMAS_M * 2]) {
+        float *smem_write = smem_;
         // Extract the position in the warp.
         int warp = tidx_ / Cta_tile::THREADS_PER_WARP;
         int lane = tidx_ % Cta_tile::THREADS_PER_WARP;
