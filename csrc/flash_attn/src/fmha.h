@@ -170,7 +170,7 @@ struct FMHA_dgrad_params : public FMHA_fprop_params {
 
 template<typename Kernel_params>
 struct Launch_params{
-    Launch_params(cudaDeviceProp * props_,
+    Launch_params(const cudaDeviceProp * props_,
                   cudaStream_t stream_,
                   bool is_dropout_,
                   bool return_softmax_)
@@ -183,7 +183,7 @@ struct Launch_params{
 
     size_t elts_per_thread;
 
-    cudaDeviceProp * props;
+    const cudaDeviceProp * props;
 
     cudaStream_t stream;
 
