@@ -94,7 +94,7 @@ void run_fmha_bwd_loop(FMHA_dgrad_params &params, cudaStream_t stream, const boo
             // auto dprops = at::cuda::getCurrentDeviceProperties();
             auto dprops = oneflow::getCurrentDeviceProperties(oneflow::GetCudaDeviceIndex());
             // printf("CTAS_PER_SM = %d, nSMs = %d\n", ctas_per_sm, dprops->multiProcessorCount);
-            constexpr int M = Kernel_traits::Cta_tile_p::M;
+            // constexpr int M = Kernel_traits::Cta_tile_p::M;
             // We don't want more than 10 splits due to numerical error.
             // Numerical error on dk/dv scales as sqrt(num_splits).
             params.num_splits = num_splits_heuristic_bwd(

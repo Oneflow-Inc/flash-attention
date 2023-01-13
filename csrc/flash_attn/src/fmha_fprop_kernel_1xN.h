@@ -725,11 +725,11 @@ inline __device__ void device_1xN_loop(const Params &params) {
         fmha::device_1xN_<Kernel_traits, Is_dropout, Is_causal, Return_softmax, true, true, has_attn_mask, has_attn_bias>(params, bidb, bidh, STEPS, ph, 0);
     } else {
         const int max_loop_steps = (params.seqlen_k + blocksize_c - 1) / blocksize_c;
-        fmha::device_1xN_<Kernel_traits, Is_dropout, Is_causal, Return_softmax, true, false, has_attn_mask, has_attn_bias,>(params, bidb, bidh, STEPS, ph, 0);
+        fmha::device_1xN_<Kernel_traits, Is_dropout, Is_causal, Return_softmax, true, false, has_attn_mask, has_attn_bias>(params, bidb, bidh, STEPS, ph, 0);
         for (int loop_step_idx = 1; loop_step_idx < max_loop_steps - 1; loop_step_idx++) {
-            fmha::device_1xN_<Kernel_traits, Is_dropout, Is_causal, Return_softmax, false, false, has_attn_mask, has_attn_bias,>(params, bidb, bidh, STEPS, ph, loop_step_idx);
+            fmha::device_1xN_<Kernel_traits, Is_dropout, Is_causal, Return_softmax, false, false, has_attn_mask, has_attn_bias>(params, bidb, bidh, STEPS, ph, loop_step_idx);
         }
-        fmha::device_1xN_<Kernel_traits, Is_dropout, Is_causal, Return_softmax, false, true, has_attn_mask, has_attn_bias,>(params, bidb, bidh, STEPS, ph, max_loop_steps - 1);
+        fmha::device_1xN_<Kernel_traits, Is_dropout, Is_causal, Return_softmax, false, true, has_attn_mask, has_attn_bias>(params, bidb, bidh, STEPS, ph, max_loop_steps - 1);
     }
 }
 

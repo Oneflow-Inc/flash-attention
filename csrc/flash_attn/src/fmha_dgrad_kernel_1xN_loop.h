@@ -581,7 +581,7 @@ inline __device__ void compute_dq_dk_dv_1xN_one_iter(const Params &params, Prng 
 
         softmax.template pack<elem_type>(frag_p);
 
-        if constexpr (has_attn_bias) {
+        if (has_attn_bias) {
             gmem_ds.template store<elem_type>(softmax.elt_);
             gmem_ds.move();
         }
