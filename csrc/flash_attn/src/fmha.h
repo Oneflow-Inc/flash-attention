@@ -66,18 +66,6 @@ struct Qkv_params {
 
 struct FMHA_fprop_params : public Qkv_params {
 
-    // The attn mask matrix
-    void * __restrict__ attn_mask_ptr;
-    int mask_head_mod_size;
-    int mask_seq_mod_size;
-
-    // The attn bias matrix
-    void * __restrict__ attn_bias_ptr;
-    int bias_mod_size;
-
-    // The ds matrix
-    void * __restrict__ attn_ds_ptr;
-
     // The O matrix (output).
     void * __restrict__ o_ptr;
 
@@ -132,6 +120,8 @@ struct FMHA_fprop_params : public Qkv_params {
 
     bool is_bf16;
     bool is_causal;
+
+    int num_splits; // How many SMs per attention matrix.
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -142,6 +132,10 @@ struct FMHA_dgrad_params : public FMHA_fprop_params {
     void *__restrict__ dq_ptr;
     void *__restrict__ dk_ptr;
     void *__restrict__ dv_ptr;
+
+    // // To accumulate dK and dV in case we're splitting the bwd along seqlen_q dimension
+    // void *__restrict__ dk_accum_ptr;
+    // void *__restrict__ dv_accum_ptr;
 
     // The stride between rows of the dQ, dK and dV matrices.
     // TD [2022-04-16]: We're using 32-bit indexing to save registers.
@@ -164,7 +158,7 @@ struct FMHA_dgrad_params : public FMHA_fprop_params {
 
 template<typename Kernel_params>
 struct Launch_params{
-    Launch_params(const cudaDeviceProp * props_,
+    Launch_params(cudaDeviceProp * props_,
                   cudaStream_t stream_,
                   bool is_dropout_,
                   bool return_softmax_)
@@ -177,7 +171,7 @@ struct Launch_params{
 
     size_t elts_per_thread;
 
-    const cudaDeviceProp * props;
+    cudaDeviceProp * props;
 
     cudaStream_t stream;
 
