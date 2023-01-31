@@ -697,7 +697,7 @@ struct Gmem_tile_mma_bias {
         // do we need to move col first if seklen_k > cols
         ptr_ += row_offset;
 
-        indices_ptr_ = params.indices_ptr ? (static_cast<uint32_t *>params.indices_ptr + binfo.sum_s_k) : nullptr;
+        indices_ptr_ = params.indices_ptr ? (static_cast<uint32_t *>(params.indices_ptr) + binfo.sum_s_k) : nullptr;
     }
 
     // Load from global memory to Fragment.
@@ -791,20 +791,20 @@ struct Gmem_tile_mma_bias {
                         int offset = ii * 2 + jj;
                         const int current_row = mi * Mma_tile::M_PER_MMA_PER_CTA + ii * 8;
                         const int current_col = loop_step_idx * Cta_tile::N + ni * Mma_tile::N_PER_MMA_PER_CTA + jj * 8 + col;
-                        ptr1 = ptr_ + (uint32_t)current_row * row_stride_in_bytes +
+                        void *ptr1 = ptr_ + (uint32_t)current_row * row_stride_in_bytes +
                                     (uint32_t)indices_ptr_[current_col] * BYTES_PER_ELEMENT;
-                        ptr2 = ptr_ + (uint32_t)current_row * row_stride_in_bytes +
+                        void *ptr2 = ptr_ + (uint32_t)current_row * row_stride_in_bytes +
                                     (uint32_t)indices_ptr_[current_col + 1] * BYTES_PER_ELEMENT;
-                        pred1 = (current_row + row < min(ROWS, actual_seqlen_q))
+                        bool pred1 = (current_row + row < min(ROWS, actual_seqlen_q))
                                         && ((current_col) < actual_seqlen_k);
-                        pred2 = (current_row + row < min(ROWS, actual_seqlen_q))
+                        bool pred2 = (current_row + row < min(ROWS, actual_seqlen_q))
                                         && ((current_col + 1) < actual_seqlen_k);
                         uint32_t data = 0;
                         if(pred1){
                             data = (uint32_t)(*reinterpret_cast<const uint16_t*>(ptr1)) << 16;
                             if(pred2)
                                 data += *reinterpret_cast<const uint16_t*>(ptr2);
-                            frag[mi][ni].regs_ = data;
+                            frag[mi][ni].regs_[offset] = data;
                         }
                     }
                 }
@@ -906,7 +906,7 @@ struct Gmem_tile_mma_ds {
         // do we need to move col first if seklen_k > cols
         ptr_ += row_offset;
 
-        indices_ptr_ = params.indices_ptr ? static_cast<uint32_t *>params.indices_ptr + binfo.sum_s_k : nullptr;
+        indices_ptr_ = params.indices_ptr ? (static_cast<uint32_t *>(params.indices_ptr) + binfo.sum_s_k) : nullptr;
     }
 
     // Store to global memory.
