@@ -78,6 +78,9 @@ struct FMHA_fprop_params : public Qkv_params {
     // The ds matrix
     void * __restrict__ attn_ds_ptr;
 
+    // indices ptr
+    void * __restrict__ indices_ptr;
+
     // The O matrix (output).
     void * __restrict__ o_ptr;
 

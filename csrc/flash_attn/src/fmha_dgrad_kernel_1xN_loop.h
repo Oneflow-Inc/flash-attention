@@ -461,7 +461,10 @@ inline __device__ void compute_dq_dk_dv_1xN_one_iter(const Params &params, Prng 
         if (has_attn_bias) {
             using Frag_Bias = fmha::Fragment_c<fmha::Row, elem_type>;
             Frag_Bias frag_bias[Mma_tile_p::MMAS_M][Mma_tile_p::MMAS_N];
-            gmem_bias.template load<Frag_Bias, elem_type>(frag_bias);
+            if(gmem_bias.indices_ptr_)
+                gmem_bias.template load_by_indices<Frag_Bias, elem_type>(frag_bias);
+            else
+                gmem_bias.template load<Frag_Bias, elem_type>(frag_bias);
             gmem_bias.move();
 
             // Apply the attn bias.
@@ -582,7 +585,10 @@ inline __device__ void compute_dq_dk_dv_1xN_one_iter(const Params &params, Prng 
         softmax.template pack<elem_type>(frag_p);
 
         if (has_attn_bias) {
-            gmem_ds.template store<elem_type>(softmax.elt_);
+            if(gmem_ds.indices_ptr_)
+                gmem_ds.template store_by_indices<elem_type>(softmax.elt_);
+            else
+                gmem_ds.template store<elem_type>(softmax.elt_);
             gmem_ds.move();
         }
 

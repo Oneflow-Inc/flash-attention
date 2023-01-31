@@ -444,7 +444,10 @@ inline __device__ void device_1xN_(const Params &params, const int bidb, const i
             using Frag_Bias = fmha::Fragment_c<fmha::Row, elem_type>;
             Frag_Bias frag_bias[Mma_tile_p::MMAS_M][Mma_tile_p::MMAS_N];
             fmha::clear(frag_bias);
-            gmem_bias.template load<Frag_Bias, elem_type>(frag_bias);
+            if(gmem_bias.indices_ptr_)
+                gmem_bias.template load_by_indices<Frag_Bias, elem_type>(frag_bias);
+            else
+                gmem_bias.template load<Frag_Bias, elem_type>(frag_bias);
             gmem_bias.move(step_stride);
 
             // Apply the attn bias.

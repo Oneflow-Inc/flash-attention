@@ -586,9 +586,10 @@ struct Gmem_tile_mma_mask {
                     #pragma unroll
                     for(int kk = 0; kk < LDGS_PER_THREAD_PER_WARP; ++kk ) {
                         if (preds[kk] == 1) {
-                            uint16_t dst_16_h = *reinterpret_cast<const uint16_t*>(ptrs[kk]);
-                            uint16_t dst_16_l = *(reinterpret_cast<const uint16_t*>(ptrs[kk]) + 1);
-                            frag[mi][ni].regs_[kk] = ((uint32_t)dst_16_l << 16) + dst_16_h;
+                            // uint16_t dst_16_h = *reinterpret_cast<const uint16_t*>(ptrs[kk]);
+                            // uint16_t dst_16_l = *(reinterpret_cast<const uint16_t*>(ptrs[kk]) + 1);
+                            // frag[mi][ni].regs_[kk] = ((uint32_t)dst_16_l << 16) + dst_16_h;
+                            frag[mi][ni].regs_[kk] = *reinterpret_cast<const uint32_t*>(ptrs[kk]);
                         }
                         if (preds[kk] == 2) {
                             uint16_t dst_16 = *reinterpret_cast<const uint16_t*>(ptrs[kk]);
@@ -695,6 +696,8 @@ struct Gmem_tile_mma_bias {
 
         // do we need to move col first if seklen_k > cols
         ptr_ += row_offset;
+
+        indices_ptr_ = params.indices_ptr ? (static_cast<uint32_t *>params.indices_ptr + binfo.sum_s_k) : nullptr;
     }
 
     // Load from global memory to Fragment.
@@ -760,13 +763,48 @@ struct Gmem_tile_mma_bias {
                     #pragma unroll
                     for(int kk = 0; kk < LDGS_PER_THREAD_PER_WARP; ++kk ) {
                         if (preds[kk] == 1) {
-                            uint16_t dst_16_h = *reinterpret_cast<const uint16_t*>(ptrs[kk]);
-                            uint16_t dst_16_l = *(reinterpret_cast<const uint16_t*>(ptrs[kk]) + 1);
-                            frag[mi][ni].regs_[kk] = ((uint32_t)dst_16_l << 16) + dst_16_h;
+                            // uint16_t dst_16_h = *reinterpret_cast<const uint16_t*>(ptrs[kk]);
+                            // uint16_t dst_16_l = *(reinterpret_cast<const uint16_t*>(ptrs[kk]) + 1);
+                            // frag[mi][ni].regs_[kk] = ((uint32_t)dst_16_l << 16) + dst_16_h;
+                            frag[mi][ni].regs_[kk] = *reinterpret_cast<const uint32_t*>(ptrs[kk]);
                         }
                         if (preds[kk] == 2) {
                             uint16_t dst_16 = *reinterpret_cast<const uint16_t*>(ptrs[kk]);
                             frag[mi][ni].regs_[kk] = ((uint32_t)0 << 16) + dst_16;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    template<typename Fragment, typename elem_type>
+    inline __device__ void load_by_indices(Fragment (&frag)[M][N]){
+        #pragma unroll
+        for( int mi = 0; mi < M; mi++ ) {
+            #pragma unroll
+            for( int ni = 0; ni < N; ni++ ) {
+                #pragma unroll
+                for ( int ii = 0; ii < 2; ++ii ) {
+                    #pragma unroll
+                    for (int jj = 0; jj < 2; ++jj ) {
+                        int offset = ii * 2 + jj;
+                        const int current_row = mi * Mma_tile::M_PER_MMA_PER_CTA + ii * 8;
+                        const int current_col = loop_step_idx * Cta_tile::N + ni * Mma_tile::N_PER_MMA_PER_CTA + jj * 8 + col;
+                        ptr1 = ptr_ + (uint32_t)current_row * row_stride_in_bytes +
+                                    (uint32_t)indices_ptr_[current_col] * BYTES_PER_ELEMENT;
+                        ptr2 = ptr_ + (uint32_t)current_row * row_stride_in_bytes +
+                                    (uint32_t)indices_ptr_[current_col + 1] * BYTES_PER_ELEMENT;
+                        pred1 = (current_row + row < min(ROWS, actual_seqlen_q))
+                                        && ((current_col) < actual_seqlen_k);
+                        pred2 = (current_row + row < min(ROWS, actual_seqlen_q))
+                                        && ((current_col + 1) < actual_seqlen_k);
+                        uint32_t data = 0;
+                        if(pred1){
+                            data = (uint32_t)(*reinterpret_cast<const uint16_t*>(ptr1)) << 16;
+                            if(pred2)
+                                data += *reinterpret_cast<const uint16_t*>(ptr2);
+                            frag[mi][ni].regs_ = data;
                         }
                     }
                 }
@@ -785,6 +823,7 @@ struct Gmem_tile_mma_bias {
     uint32_t row_stride_in_bytes;
     // The pointer.
     char *ptr_;
+    uint32_t *indices_ptr_;
     int actual_seqlen_q;
     int actual_seqlen_k;
     const int tidx_;
@@ -866,6 +905,8 @@ struct Gmem_tile_mma_ds {
         row_offset += (uint32_t)(row * binfo.actual_seqlen_k * BYTES_PER_ELEMENT);
         // do we need to move col first if seklen_k > cols
         ptr_ += row_offset;
+
+        indices_ptr_ = params.indices_ptr ? static_cast<uint32_t *>params.indices_ptr + binfo.sum_s_k : nullptr;
     }
 
     // Store to global memory.
@@ -946,6 +987,43 @@ struct Gmem_tile_mma_ds {
         }
     }
 
+    template<typename elem_type>
+    inline __device__ void store_by_indices(const float (&softmax)[2 * M][4 * N], int l = 0){
+        #pragma unroll
+        for( int mi = 0; mi < M; mi++ ) {
+            #pragma unroll
+            for( int ni = 0; ni < N; ni++ ) {
+                #pragma unroll
+                for ( int ii = 0; ii < 2; ++ii ) {
+                    #pragma unroll
+                    for (int jj = 0; jj < 2; ++jj ) {
+                        float tmp00 = softmax[2 * mi + ii][4 * ni + jj * 2];
+                        float tmp01 = softmax[2 * mi + ii][4 * ni + jj * 2 + 1];
+                        uint16_t data1 = fmha::float_pack<elem_type>(tmp00);
+                        uint16_t data2 = fmha::float_pack<elem_type>(tmp01);
+
+                        const int current_row = mi * Mma_tile::M_PER_MMA_PER_CTA  + ii * 8;
+                        const int current_col = loop_step_idx * Cta_tile::N + ni * Mma_tile::N_PER_MMA_PER_CTA + jj * 8 + col;
+
+                        char *ptr1 = ptr_ + (uint32_t)current_row * row_stride_in_bytes +
+                                        (uint32_t)indices_ptr_[current_col] * BYTES_PER_ELEMENT;
+                        char *ptr2 = ptr_ + (uint32_t)current_row * row_stride_in_bytes +
+                                        (uint32_t)indices_ptr_[current_col + 1] * BYTES_PER_ELEMENT;
+
+                        if ((current_row + row < min(ROWS, actual_seqlen_q))) {
+                            if(current_col < actual_seqlen_k) {
+                                fmha::stg(reinterpret_cast<uint16_t*>(ptr1), data1);
+                                if(current_col + 1 < actual_seqlen_k)
+                                    fmha::stg(reinterpret_cast<uint16_t*>(ptr2), data2);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+
     inline __device__ void move(const int steps = 1) {
         ptr_ += (uint32_t)ROWS * row_stride_in_bytes * steps;
         this->actual_seqlen_q -= ROWS * steps;
@@ -957,6 +1035,7 @@ struct Gmem_tile_mma_ds {
     uint32_t row_stride_in_bytes;
     // The pointer.
     char *ptr_;
+    uint32_t *indices_ptr_;
     int actual_seqlen_q;
     int actual_seqlen_k;
     const int tidx_;
