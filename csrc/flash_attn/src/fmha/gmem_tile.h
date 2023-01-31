@@ -586,10 +586,9 @@ struct Gmem_tile_mma_mask {
                     #pragma unroll
                     for(int kk = 0; kk < LDGS_PER_THREAD_PER_WARP; ++kk ) {
                         if (preds[kk] == 1) {
-                            // uint16_t dst_16_h = *reinterpret_cast<const uint16_t*>(ptrs[kk]);
-                            // uint16_t dst_16_l = *(reinterpret_cast<const uint16_t*>(ptrs[kk]) + 1);
-                            // frag[mi][ni].regs_[kk] = ((uint32_t)dst_16_l << 16) + dst_16_h;
-                            frag[mi][ni].regs_[kk] = *reinterpret_cast<const uint32_t*>(ptrs[kk]);
+                            uint16_t dst_16_h = *reinterpret_cast<const uint16_t*>(ptrs[kk]);
+                            uint16_t dst_16_l = *(reinterpret_cast<const uint16_t*>(ptrs[kk]) + 1);
+                            frag[mi][ni].regs_[kk] = ((uint32_t)dst_16_l << 16) + dst_16_h;
                         }
                         if (preds[kk] == 2) {
                             uint16_t dst_16 = *reinterpret_cast<const uint16_t*>(ptrs[kk]);
@@ -763,10 +762,9 @@ struct Gmem_tile_mma_bias {
                     #pragma unroll
                     for(int kk = 0; kk < LDGS_PER_THREAD_PER_WARP; ++kk ) {
                         if (preds[kk] == 1) {
-                            // uint16_t dst_16_h = *reinterpret_cast<const uint16_t*>(ptrs[kk]);
-                            // uint16_t dst_16_l = *(reinterpret_cast<const uint16_t*>(ptrs[kk]) + 1);
-                            // frag[mi][ni].regs_[kk] = ((uint32_t)dst_16_l << 16) + dst_16_h;
-                            frag[mi][ni].regs_[kk] = *reinterpret_cast<const uint32_t*>(ptrs[kk]);
+                            uint16_t dst_16_h = *reinterpret_cast<const uint16_t*>(ptrs[kk]);
+                            uint16_t dst_16_l = *(reinterpret_cast<const uint16_t*>(ptrs[kk]) + 1);
+                            frag[mi][ni].regs_[kk] = ((uint32_t)dst_16_l << 16) + dst_16_h;
                         }
                         if (preds[kk] == 2) {
                             uint16_t dst_16 = *reinterpret_cast<const uint16_t*>(ptrs[kk]);
