@@ -662,8 +662,9 @@ struct Gmem_tile_mma_bias {
         , tidx_(tidx)
         , loop_step_idx(loop_step_idx)
     {
-        row_stride_in_bytes = binfo.actual_seqlen_k * BYTES_PER_ELEMENT;
-        
+        // row_stride_in_bytes = binfo.actual_seqlen_k * BYTES_PER_ELEMENT;
+        row_stride_in_bytes = (params.indices_ptr ? *reinterpret_cast<uint32_t*>(params.indices_ptr) : binfo.actual_seqlen_k) * BYTES_PER_ELEMENT;
+
         const int warp = tidx_ / Cta_tile::THREADS_PER_WARP;
         const int lane = tidx_ % Cta_tile::THREADS_PER_WARP;
         
@@ -689,14 +690,22 @@ struct Gmem_tile_mma_bias {
         uint32_t bidx = ( binfo.bidb % params.bias_mod_size ) * params.h + binfo.bidh;
 
         // the index of bs and head dim
-        uint32_t row_offset = bidx * binfo.actual_seqlen_q * binfo.actual_seqlen_k * BYTES_PER_ELEMENT;
-        // row_offset = (uint32_t)(row * row_stride_in_bytes);
-        row_offset += (uint32_t)(row * binfo.actual_seqlen_k * BYTES_PER_ELEMENT);   
+        // uint32_t row_offset = bidx * binfo.actual_seqlen_q * binfo.actual_seqlen_k * BYTES_PER_ELEMENT;
+        // if indices_ptr!=nullptr, the first element stores the origin `seqlen_k`
+        uint32_t row_offset = bidx * binfo.actual_seqlen_q * BYTES_PER_ELEMENT *
+            (params.indices_ptr ? *reinterpret_cast<uint32_t*>(params.indices_ptr) : binfo.actual_seqlen_k);
 
+        // row_offset = (uint32_t)(row * row_stride_in_bytes);
+        // row_offset += (uint32_t)(row * binfo.actual_seqlen_k * BYTES_PER_ELEMENT);   
+        row_offset += (uint32_t)(row * BYTES_PER_ELEMENT *
+                    (params.indices_ptr ? *reinterpret_cast<uint32_t*>(params.indices_ptr) : binfo.actual_seqlen_k));
+        
         // do we need to move col first if seklen_k > cols
         ptr_ += row_offset;
 
-        indices_ptr_ = params.indices_ptr ? (static_cast<uint32_t *>(params.indices_ptr) + binfo.sum_s_k) : nullptr;
+        indices_ptr_ = params.indices_ptr ? 
+                (static_cast<uint32_t *>(params.indices_ptr) + 1 /*skip the first element*/ + binfo.sum_s_k)
+                : nullptr;
     }
 
     // Load from global memory to Fragment.
@@ -789,19 +798,20 @@ struct Gmem_tile_mma_bias {
                         int offset = ii * 2 + jj;
                         const int current_row = mi * Mma_tile::M_PER_MMA_PER_CTA + ii * 8;
                         const int current_col = loop_step_idx * Cta_tile::N + ni * Mma_tile::N_PER_MMA_PER_CTA + jj * 8 + col;
-                        void *ptr1 = ptr_ + (uint32_t)current_row * row_stride_in_bytes +
-                                    (uint32_t)indices_ptr_[current_col] * BYTES_PER_ELEMENT;
-                        void *ptr2 = ptr_ + (uint32_t)current_row * row_stride_in_bytes +
-                                    (uint32_t)indices_ptr_[current_col + 1] * BYTES_PER_ELEMENT;
                         bool pred1 = (current_row + row < min(ROWS, actual_seqlen_q))
                                         && ((current_col) < actual_seqlen_k);
-                        bool pred2 = (current_row + row < min(ROWS, actual_seqlen_q))
-                                        && ((current_col + 1) < actual_seqlen_k);
                         uint32_t data = 0;
                         if(pred1){
-                            data = (uint32_t)(*reinterpret_cast<const uint16_t*>(ptr1)) << 16;
-                            if(pred2)
-                                data += *reinterpret_cast<const uint16_t*>(ptr2);
+                            void *ptr1 = ptr_ + (uint32_t)current_row * row_stride_in_bytes +
+                                    indices_ptr_[current_col] * BYTES_PER_ELEMENT;
+                            data = (uint32_t)(*reinterpret_cast<const uint16_t*>(ptr1));
+                            bool pred2 = (current_row + row < min(ROWS, actual_seqlen_q))
+                                        && ((current_col + 1) < actual_seqlen_k);
+                            if(pred2){
+                                void *ptr2 = ptr_ + (uint32_t)current_row * row_stride_in_bytes +
+                                    indices_ptr_[current_col + 1] * BYTES_PER_ELEMENT;
+                                data += uint32_t(*reinterpret_cast<const uint16_t*>(ptr2)) << 16;
+                            }
                             frag[mi][ni].regs_[offset] = data;
                         }
                     }
@@ -869,7 +879,8 @@ struct Gmem_tile_mma_ds {
         , tidx_(tidx)
         , loop_step_idx(loop_step_idx)
     {
-        row_stride_in_bytes = binfo.actual_seqlen_k * BYTES_PER_ELEMENT;
+        // row_stride_in_bytes = binfo.actual_seqlen_k * BYTES_PER_ELEMENT;
+        row_stride_in_bytes = (params.indices_ptr ? *reinterpret_cast<uint32_t*>(params.indices_ptr) : binfo.actual_seqlen_k) * BYTES_PER_ELEMENT;
 
         const int warp = tidx_ / Cta_tile::THREADS_PER_WARP;
         const int lane = tidx_ % Cta_tile::THREADS_PER_WARP;
@@ -897,14 +908,20 @@ struct Gmem_tile_mma_ds {
         uint32_t bidx = binfo.bidb * params.h + binfo.bidh;
 
         // the index of bs and head dim
-        uint32_t row_offset = bidx * binfo.actual_seqlen_q * binfo.actual_seqlen_k * BYTES_PER_ELEMENT;
+        // uint32_t row_offset = bidx * binfo.actual_seqlen_q * binfo.actual_seqlen_k * BYTES_PER_ELEMENT;
+        // if indices_ptr!=nullptr, the first element stores the origin `seqlen_k`
+        uint32_t row_offset = bidx * binfo.actual_seqlen_q * BYTES_PER_ELEMENT *
+            (params.indices_ptr ? *reinterpret_cast<uint32_t*>(params.indices_ptr) : binfo.actual_seqlen_k);
         // row_offset = (uint32_t)(row * row_stride_in_bytes);
 
-        row_offset += (uint32_t)(row * binfo.actual_seqlen_k * BYTES_PER_ELEMENT);
+        row_offset += (uint32_t)(row * BYTES_PER_ELEMENT *
+                    (params.indices_ptr ? *reinterpret_cast<uint32_t*>(params.indices_ptr) : binfo.actual_seqlen_k));
         // do we need to move col first if seklen_k > cols
         ptr_ += row_offset;
 
-        indices_ptr_ = params.indices_ptr ? (static_cast<uint32_t *>(params.indices_ptr) + binfo.sum_s_k) : nullptr;
+        indices_ptr_ = params.indices_ptr ? 
+                (static_cast<uint32_t *>(params.indices_ptr) + 1 /*skip the first element*/ + binfo.sum_s_k)
+                : nullptr;    
     }
 
     // Store to global memory.
