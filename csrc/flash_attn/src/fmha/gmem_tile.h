@@ -572,7 +572,7 @@ struct Gmem_tile_mma_mask {
                                         (uint32_t)current_col * BYTES_PER_ELEMENT;
                             preds[offset] = 0;
                             if ((current_row + (row % mask_seq_mod_size) < min(ROWS, actual_seqlen_q))) {
-                                if(current_col <= actual_seqlen_k) {
+                                if(current_col < actual_seqlen_k) {
                                     if((current_col + BYTES_PER_LDG / BYTES_PER_ELEMENT) <= actual_seqlen_k){
                                         preds[offset] = 1;
                                     }else if((current_col + BYTES_PER_LDG / BYTES_PER_ELEMENT - 1) == actual_seqlen_k) {
@@ -757,7 +757,7 @@ struct Gmem_tile_mma_bias {
                                         (uint32_t)current_col * BYTES_PER_ELEMENT;
                             preds[offset] = 0;
                             if ((current_row + row < min(ROWS, actual_seqlen_q))) {
-                                if(current_col <= actual_seqlen_k) {
+                                if(current_col < actual_seqlen_k) {
                                     if((current_col + BYTES_PER_LDG / BYTES_PER_ELEMENT) <= actual_seqlen_k){
                                         preds[offset] = 1;
                                     }else if((current_col + BYTES_PER_LDG / BYTES_PER_ELEMENT - 1) == actual_seqlen_k) {
