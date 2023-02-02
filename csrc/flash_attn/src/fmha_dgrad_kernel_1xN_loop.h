@@ -468,7 +468,7 @@ inline __device__ void compute_dq_dk_dv_1xN_one_iter(const Params &params, Prng 
             gmem_bias.move();
 
             // Apply the attn bias.
-            softmax.apply_attn_bias(frag_bias, mask, params.scale_bmm1f, l);
+            softmax.apply_attn_bias(frag_bias, mask, params.scale_bmm1f);
         }
 
         // Apply the mask.
