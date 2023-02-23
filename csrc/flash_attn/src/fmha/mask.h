@@ -56,10 +56,10 @@ struct Mask {
 
     inline __device__ bool is_valid(const int mi, const int ni, const int ii, const int jj) const {
 
-        // ii and jj iterate over the 2x4 fragment
+        // ii and jj iterate over the 2x4 fragment // warp: 8x4, tile: 16x16, fragment:2x4
         // const int current_col = (Is_causal ? loop_step_idx * Cta_tile::N : 0) + ni * Mma_tile::N_PER_MMA_PER_CTA + col + (jj & 2) * 4 + (jj & 1);
-        const int current_col = ni * Mma_tile::N_PER_MMA_PER_CTA + col + (jj & 2) * 4 + (jj & 1);
-        const int current_row = row_offset + ii * 8;
+        const int current_col = ni * Mma_tile::N_PER_MMA_PER_CTA + col + (jj & 2) * 4 + (jj & 1); //jj=0,1时，是相邻的两个，jj=2,3时也是相邻的两个位置，所以
+        const int current_row = row_offset + ii * 8; //在行方向上，每个thread处理一个，stride=8, 在col方向上，每个thread处理两个，
         const bool col_valid = current_col < actual_seqlen_k;
         // const bool col_valid = (ni * Mma_tile::N_PER_MMA_PER_CTA + col + (jj & 2) * 4 + (jj & 1)) < actual_seqlen_k;
         //&& (row + mi * Mma_tile::M_PER_MMA_PER_CTA + ii * 8) < actual_seqlen_k;
@@ -80,8 +80,8 @@ struct Mask {
     }
     int row_offset;
 
-    int row;
-    int col;
+    int row; //第几个warp, 
+    int col; 
     const int loop_step_idx;
     const int actual_seqlen_k;
 };

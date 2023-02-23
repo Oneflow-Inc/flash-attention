@@ -30,6 +30,8 @@
 #include <cmath>
 #include <cuda_fp16.h>
 
+#include <fmha/utils.h>
+
 namespace fmha {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -278,73 +280,6 @@ struct Softmax_base {
     // }
 
     template <bool encode_dropout_in_sign_bit=false>
-    inline __device__ void apply_dropout(Philox &ph, uint32_t p_dropout_in_uint) {
-        // We encode the dropout pattern in the sign bit of the non-negative
-        // softmax to distinguish from pre-existing zeros
-        auto encode_dropout = [](bool keep, float val) {
-            return keep ? val : (encode_dropout_in_sign_bit ? -val : float(0));
-        };
-        #pragma unroll
-        for( int mi = 0; mi < MMAS_M * 2; mi++ ) {
-            #pragma unroll
-            for( int ni = 0; ni < MMAS_N; ni++ ) {
-                uint4 tmp = ph();
-                // if ((threadIdx.x == 0) && (blockIdx.x == 0) && (blockIdx.y == 0)) {
-                //     printf("ni = %d, ph  Philox: %u, %u, %u, %u\n", ni, tmp.x, tmp.y, tmp.z, tmp.w);
-                // }
-                elt_[mi][4 * ni + 0] =
-                    encode_dropout(tmp.x <= p_dropout_in_uint, elt_[mi][4 * ni + 0]);
-                elt_[mi][4 * ni + 1] =
-                    encode_dropout(tmp.y <= p_dropout_in_uint, elt_[mi][4 * ni + 1]);
-                elt_[mi][4 * ni + 2] =
-                    encode_dropout(tmp.z <= p_dropout_in_uint, elt_[mi][4 * ni + 2]);
-                elt_[mi][4 * ni + 3] =
-                    encode_dropout(tmp.w <= p_dropout_in_uint, elt_[mi][4 * ni + 3]);
-            }
-        }
-    }
-
-    template <bool encode_dropout_in_sign_bit=false>
-    inline __device__ void apply_dropout(Philox &ph0, Philox &ph1, uint32_t p_dropout_in_uint) {
-        // We encode the dropout pattern in the sign bit of the non-negative
-        // softmax to distinguish from pre-existing zeros
-        auto encode_dropout = [](bool keep, float val) {
-            return keep ? val : (encode_dropout_in_sign_bit ? -val : float(0));
-        };
-        #pragma unroll
-        for( int mi = 0; mi < MMAS_M * 2; mi++ ) {
-            static_assert(MMAS_N % 2 == 0);
-            #pragma unroll
-            for( int ni = 0; ni < MMAS_N; ni += 2 ) {
-                uint4 tmp = ph0();
-                // if ((threadIdx.x == 0) && (blockIdx.x == 0) && (blockIdx.y == 0)) {
-                //     printf("ni = %d, ph0, Philox: %u, %u, %u, %u\n", ni, tmp.x, tmp.y, tmp.z, tmp.w);
-                // }
-                elt_[mi][4 * ni + 0] =
-                    encode_dropout(tmp.x <= p_dropout_in_uint, elt_[mi][4 * ni + 0]);
-                elt_[mi][4 * ni + 1] =
-                    encode_dropout(tmp.y <= p_dropout_in_uint, elt_[mi][4 * ni + 1]);
-                elt_[mi][4 * ni + 2] =
-                    encode_dropout(tmp.z <= p_dropout_in_uint, elt_[mi][4 * ni + 2]);
-                elt_[mi][4 * ni + 3] =
-                    encode_dropout(tmp.w <= p_dropout_in_uint, elt_[mi][4 * ni + 3]);
-                tmp = ph1();
-                // if ((threadIdx.x == 0) && (blockIdx.x == 0) && (blockIdx.y == 0)) {
-                //     printf("ni = %d, ph1, Philox: %u, %u, %u, %u\n", ni + 1, tmp.x, tmp.y, tmp.z, tmp.w);
-                // }
-                elt_[mi][4 * (ni + 1) + 0] =
-                    encode_dropout(tmp.x <= p_dropout_in_uint, elt_[mi][4 * (ni + 1) + 0]);
-                elt_[mi][4 * (ni + 1) + 1] =
-                    encode_dropout(tmp.y <= p_dropout_in_uint, elt_[mi][4 * (ni + 1) + 1]);
-                elt_[mi][4 * (ni + 1) + 2] =
-                    encode_dropout(tmp.z <= p_dropout_in_uint, elt_[mi][4 * (ni + 1) + 2]);
-                elt_[mi][4 * (ni + 1) + 3] =
-                    encode_dropout(tmp.w <= p_dropout_in_uint, elt_[mi][4 * (ni + 1) + 3]);
-            }
-        }
-    }
-
-    template <bool encode_dropout_in_sign_bit=false>
     inline __device__ void apply_dropout_16bits(Philox &ph, uint16_t p_dropout_in_uint16_t) {
         // We encode the dropout pattern in the sign bit of the non-negative
         // softmax to distinguish from pre-existing zeros
@@ -356,9 +291,44 @@ struct Softmax_base {
             #pragma unroll
             for( int ni = 0; ni < MMAS_N; ni++ ) {
                 uint16_t tmp[8];
-                fmha::uint4_to_ushort8(ph(), tmp);
+                // fmha::uint4_to_ushort8(ph(), tmp);
+                uint4 tmp_32 = ph();
+                fmha::uint4_to_ushort8(tmp_32, tmp);
+                // if ((threadIdx.x % 32 == 0) && (blockIdx.x == 0) && (blockIdx.y == 0)) {
+                //     printf("tidx = %d, ni = %d, ph  Philox: %u, %u, %u, %u\n", threadIdx.x, ni, tmp_32.x, tmp_32.y, tmp_32.z, tmp_32.w);
+                // }
+                #pragma unroll
+                for (int ii = 0; ii < 2; ++ii) {
+                    #pragma unroll
+                    for (int jj = 0; jj < 4; ++jj) {
+                        elt_[mi * 2 + ii][4 * ni + jj] =
+                            encode_dropout(tmp[ii * 4 + jj] <= p_dropout_in_uint16_t, elt_[mi * 2 + ii][4 * ni + jj]);
+                    }
+                }
+            }
+        }
+    }
+
+    template <bool encode_dropout_in_sign_bit=false>
+    inline __device__ void apply_dropout_16bits(Philox &ph, uint16_t p_dropout_in_uint16_t,
+                                                unsigned long long philox_subsequence) {
+        // We encode the dropout pattern in the sign bit of the non-negative
+        // softmax to distinguish from pre-existing zeros
+        auto encode_dropout = [](bool keep, float val) {
+            return keep ? val : (encode_dropout_in_sign_bit ? -val : float(0));
+        };
+        static_assert(MMAS_M == 1);  // We're assuming 16x16 blocks.
+        #pragma unroll
+        for( int mi = 0; mi < MMAS_M; mi++ ) {
+            #pragma unroll
+            for( int ni = 0; ni < MMAS_N; ni++ ) {
+                uint16_t tmp[8];
+                // fmha::uint4_to_ushort8(ph(), tmp);
+                fmha::uint4_to_ushort8(ph(philox_subsequence + ni * Cta_tile::WARPS_N), tmp);
+                // uint4 tmp_32 = ph(philox_subsequence + ni * Cta_tile::WARPS_N);
+                // fmha::uint4_to_ushort8(tmp_32, tmp);
                 // if ((threadIdx.x == 0) && (blockIdx.x == 0) && (blockIdx.y == 0)) {
-                //     printf("ni = %d, ph  Philox: %u, %u, %u, %u\n", ni, tmp.x, tmp.y, tmp.z, tmp.w);
+                //     printf("ni = %d, ph  Philox: %u, %u, %u, %u\n", ni, tmp_32.x, tmp_32.y, tmp_32.z, tmp_32.w);
                 // }
                 #pragma unroll
                 for (int ii = 0; ii < 2; ++ii) {
@@ -487,6 +457,46 @@ struct Softmax : public Softmax_base<Cta_tile, Kernel_traits> {
         , params_scale_bmm1_(params.scale_bmm1) 
         , smem_sum_(static_cast<float*>(smem), tidx)
         , smem_max_(static_cast<float*>(smem) + Smem_tile_red::ELTS_PER_TILE, tidx) {
+    }
+
+    template<bool zero=false, typename Fragment, typename Mask>
+    inline __device__ void apply_attn_mask(const Fragment (&attn_mask)[MMAS_M][MMAS_N], const Mask& mask, float scale_) {
+        #pragma unroll
+        for( int mi = 0; mi < MMAS_M; ++mi ) {
+            #pragma unroll
+            for( int ii = 0; ii < 2; ++ii ) {
+                #pragma unroll
+                for( int ni = 0; ni < MMAS_N; ++ni ) {
+                    #pragma unroll
+                    for( int jj = 0; jj < 4; ++jj ) {
+                        if(mask.is_valid(mi, ni, ii, jj)){
+                            float value = toFloat(attn_mask[mi][ni].elt(ii * 4 + jj));
+                            this->elt_[2 * mi + ii][4 * ni + jj] += value / scale_;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    template<bool zero=false, typename Fragment, typename Mask>
+    inline __device__ void apply_attn_bias(const Fragment (&attn_bias)[MMAS_M][MMAS_N], const Mask& mask, float scale_) {
+        #pragma unroll
+        for( int mi = 0; mi < MMAS_M; ++mi ) {
+            #pragma unroll
+            for( int ii = 0; ii < 2; ++ii ) {
+                #pragma unroll
+                for( int ni = 0; ni < MMAS_N; ++ni ) {
+                    #pragma unroll
+                    for( int jj = 0; jj < 4; ++jj ) {
+                        if(mask.is_valid(mi, ni, ii, jj)){
+                            float value = toFloat(attn_bias[mi][ni].elt(ii * 4 + jj));
+                            this->elt_[2 * mi + ii][4 * ni + jj] += value / scale_;
+                        }
+                    }
+                }
+            }
+        }
     }
 
     // Pack the data to a fragment for the next GEMM.

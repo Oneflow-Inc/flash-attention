@@ -1,6 +1,13 @@
 //Copy from https://github.com/pytorch/pytorch
 
 #include <tuple>
+#include <cuda.h>
+#include <cuda_runtime.h>
+
+namespace oneflow {
+cudaDeviceProp* GetDeviceProperties(int device_id);
+int GetCudaDeviceIndex();
+}
 
 namespace at {
 

@@ -410,6 +410,26 @@ inline __device__ uint32_t float2_pack<__nv_bfloat16>(float a, float b) {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
+template<typename T>
+inline __device__ uint16_t float_pack(float a);
+
+template <>
+inline __device__ uint16_t float_pack<__half>(float a) {
+    __half result = __float2half_rn(a);
+    return reinterpret_cast<uint16_t(&)>(result);
+}
+
+#if defined(__CUDA_ARCH__) && __CUDA_ARCH__ >= 800
+template <>
+inline __device__ uint16_t float_pack<__nv_bfloat16>(float a) {
+    __nv_bfloat16 result = __float2bfloat16_rn(a);
+    return reinterpret_cast<uint16_t(&)>(result);
+}
+#endif
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 static inline __device__ uint32_t float_to_half2(float a) {
     return float2_to_half2(a,a);
 }
@@ -1209,6 +1229,24 @@ __device__ inline void quad_allreduce(__half2 (&dst)[M], float2 (&src)[M], Opera
     }
     quad_allreduce(dst, tmp, op);
 }
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+template<typename T> __device__
+inline float toFloat(T a) {
+    return (float)a;
+}
+template<> __device__
+inline float toFloat(half a) {
+    return __half2float(a);
+}
+#if defined(__CUDA_ARCH__) &&  __CUDA_ARCH__ >= 800
+template<> __device__
+inline float toFloat(__nv_bfloat16 a) {
+    return __bfloat162float(a);
+}
+#endif
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
